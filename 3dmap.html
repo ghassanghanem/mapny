@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mapbox test</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      background-color: #f5f5f5;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      visibility: hidden;
+    }
+
+    #loader {
+      position: fixed;
+      z-index: 9999;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.95);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 24px;
+      text-align: center;
+      padding: 0 20px;
+    }
+
+    /* Add CSS for the toggle button */
+    #toggle-button {
+      position: absolute;
+      z-index: 10;
+      top: 10px;
+      right: 10px;
+      padding: 10px 20px;
+      background-color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+      border-radius: 3px;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="loader">Loading 3D assets... 0%</div>
+  <div id="map"></div>
+  <button id="toggle-button">3D</button>
+  <script>
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof mapboxgl === 'undefined' || typeof THREE === 'undefined' || typeof THREE.GLTFLoader === 'undefined') {
+    console.error('Required libraries not loaded. Please ensure they are loaded before running the script.');
+    return;
+  }
+  initMapbox(); // Move this function call inside the event listener
+});
+const initMapbox = () => {
+      mapboxgl.accessToken = 'pk.eyJ1IjoiZ2hhc3NhbmdoYW5lbSIsImEiOiJjbGVrbjl5dnUwbjJ0M3ZwZ3QyNGZpZjJhIn0.1KSVkfun4SKcX17dCGei5A';
+      const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/light-v11',
+        zoom: 16,
+        center: [-74.012014, 40.707012],
+        pitch: 0, // Set initial pitch
+        bearing: -45,
+        antialias: true
+      });
+const modelOrigin = [-74.01312930932917, 40.702178828796235];
+    const modelAltitude = 0;
+    const modelRotate = [Math.PI / 2, 50.3, 0];
+    const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(
+      modelOrigin,
+      modelAltitude
+    );
+
+    const modelTransform = {
+      translateX: modelAsMercatorCoordinate.x,
+      translateY: modelAsMercatorCoordinate.y,
+      translateZ: modelAsMercatorCoordinate.z,
+      rotateX: modelRotate[0],
+      rotateY: modelRotate[1],
+      rotateZ: modelRotate[2],
+      scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
+    };
+
+    const customLayer = {
+      id: '3d-model',
+      type: 'custom',
+      renderingMode: '3d',
+      onAdd: function (map, gl) {
+        this.camera = new THREE.PerspectiveCamera(45, map.getCanvas().width / map.getCanvas().height, 0.1, 1000);
+        this.camera.position.set(0, 0, 200);
+
+        this.scene = new THREE.Scene();
+
+        const light = new THREE.AmbientLight(0x404040, 8);
+        this.scene.add(light);
+        const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+        sun.position.set(1, 1, 1);
+            sun.castShadow = true;
+    this.scene.add(sun);
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: map.getCanvas(),
+      context: gl,
+      antialias: true
+    });
+
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    this.renderer.autoClear = false;
+
+    const loader = new THREE.GLTFLoader();
+loader.load(
+  'https://raw.githubusercontent.com/EddyNCNL/gltf/main/FULL/scene.gltf',
+  (gltf) => {
+    gltf.scene.traverse(function (node) {
+      if (node instanceof THREE.Mesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+
+    this.scene.add(gltf.scene);
+    document.getElementById('map').style.visibility = 'visible'; // Show the map container once the 3D model has been loaded and rendered
+    document.getElementById('loader').style.display = 'none';
+    map.triggerRepaint(); // Force a repaint after adding the 3D model to the scene
+  },
+  (xhr) => {
+    // Add a progress event handler
+    if (xhr.total > 0) {
+      const percentage = Math.round((xhr.loaded / xhr.total) * 100);
+      document.getElementById('loader').innerText = `Loading 3D assets... ${percentage}%`;
+    } else {
+      document.getElementById('loader').innerText = `Loading 3D assets...`;
+    }
+  }
+);
+
+    this.renderer.autoClear = false;
+  },
+  render: function (gl, matrix) {
+    const rotationX = new THREE.Matrix4().makeRotationAxis(
+      new THREE.Vector3(1, 0, 0),
+      modelTransform.rotateX
+    );
+    const rotationY = new THREE.Matrix4().makeRotationAxis(
+      new THREE.Vector3(0, 1, 0),
+      modelTransform.rotateY
+    );
+    const rotationZ = new THREE.Matrix4().makeRotationAxis(
+      new THREE.Vector3(0, 0, 1),
+      modelTransform.rotateZ
+    );
+
+    const m = new THREE.Matrix4().fromArray(matrix);
+    const l = new THREE.Matrix4()
+      .makeTranslation(
+        modelTransform.translateX,
+        modelTransform.translateY,
+        modelTransform.translateZ
+      )
+      .scale(
+        new THREE.Vector3(
+          modelTransform.scale,
+          -modelTransform.scale,
+          modelTransform.scale
+        )
+      )
+      .multiply(rotationX)
+      .multiply(rotationY)
+      .multiply(rotationZ);
+
+    this.camera.projectionMatrix = m.multiply(l);
+    this.renderer.resetState();
+    this.renderer.render(this.scene, this.camera);
+    this.map.triggerRepaint();
+  }
+};
+map.on('style.load', () => {
+    map.addLayer(customLayer, 'waterway-label');
+  });
+
+  // Add the toggle button event listener
+  const toggleButton = document.getElementById('toggle-button');
+  toggleButton.addEventListener('click', () => {
+    toggle2D3D(map);
+  });
+
+  // Create a function to toggle between 2D and 3D views and hide/show the model
+  function toggle2D3D(map) {
+    const currentPitch = map.getPitch();
+    const targetPitch = currentPitch === 0 ? 60 : 0;
+    map.easeTo({ pitch: targetPitch }, { duration: 1000 });
+
+    // Check if the custom layer is visible
+    const layerVisibility = map.getLayoutProperty('3d-model', 'visibility');
+
+    // Toggle the custom layer's visibility
+    if (layerVisibility === 'visible') {
+      map.setLayoutProperty('3d-model', 'visibility', 'none');
+    } else {
+      map.setLayoutProperty('3d-model', 'visibility', 'visible');
+    }
+  }
+};
+  </script>
+<script src="https://cdn.jsdelivr.net/npm/mapbox-gl@2.11.0/dist/mapbox-gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.126.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.126.0/examples/js/loaders/GLTFLoader.min.js">
+</script>
+</body>
+</html>
